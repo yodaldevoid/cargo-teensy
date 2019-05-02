@@ -14,15 +14,21 @@ fn main() {
             .help("The microcontroller to operate on")
             .takes_value(true)
             .empty_values(false)
-            .required_unless("list-mcus")
+            .required(true)
             .possible_values(&supported_mcus())
+        )
+        .arg(Arg::with_name("boot-only")
+            .long("boot")
+            .short("b")
+            .help("Only boot the Teensy, do not program")
         )
         .get_matches();
 
     let mcu = match parse_mcu(matches.value_of("mcu").unwrap()) {
         Some(mcu) => mcu,
         None => {
-            unimplemented!()
+            eprintln!("Unkown Teensy name");
+            std::process::exit(1);
         }
     };
 
@@ -40,13 +46,16 @@ fn main() {
 
     println!("Found HalfKey Bootloader");
 
-    // boot only
-    // FIXME: Verbose
-    println!("Booting");
-    if let Err(err) = teensy.boot() {
-        eprintln!("Boot failed");
+    if matches.is_present("boot-only") {
         // FIXME: Verbose
-        eprintln!("Boot error: {:?}", err);
-        std::process::exit(1);
+        println!("Booting");
+        if let Err(err) = teensy.boot() {
+            eprintln!("Boot failed");
+            // FIXME: Verbose
+            eprintln!("Boot error: {:?}", err);
+            std::process::exit(1);
+        }
+    } else {
+        unimplemented!()
     }
 }
