@@ -25,9 +25,19 @@ static ALIASES: [(&'static str, &'static str); 7] = [
 ];
 
 // FIXME:
-pub fn parse_mcu(_arg: &'static str) -> Option<(usize, usize)> {
-    let mcu = MCUS[4];
-    Some((mcu.1, mcu.2))
+pub fn parse_mcu(arg: &str) -> Option<(usize, usize)> {
+    let name = ALIASES.iter()
+        .filter(|&&(alias, _)| {
+            alias == arg
+        })
+        .next()
+        .map(|&(_, n)| n)
+        .unwrap_or(arg);
+
+    MCUS.iter()
+        .filter(|(n, ..)| *n == name)
+        .next()
+        .map(|&(_, flash, block)| (flash, block))
 }
 
 pub fn supported_mcus() -> Vec<&'static str> {

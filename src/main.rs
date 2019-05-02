@@ -8,18 +8,18 @@ fn main() {
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
         .author("Gabriel \"yodaldevoid\" Smith <ga29smith@gmail.com>")
         .about("A rust rewrite of teensy_loader_cli")
-        .arg(Arg::with_name("list-mcus")
-            .long("list-mcus")
-            .help("Lists supported MCUs")
+        .arg(Arg::with_name("mcu")
+            .long("mcu")
+            .short("m")
+            .help("The microcontroller to operate on")
+            .takes_value(true)
+            .empty_values(false)
+            .required_unless("list-mcus")
+            .possible_values(&supported_mcus())
         )
         .get_matches();
 
-    if matches.is_present("list-mcus") {
-        print_supported_mcus();
-        return;
-    }
-
-    let mcu = match parse_mcu("") {
+    let mcu = match parse_mcu(matches.value_of("mcu").unwrap()) {
         Some(mcu) => mcu,
         None => {
             unimplemented!()
@@ -48,12 +48,5 @@ fn main() {
         // FIXME: Verbose
         eprintln!("Boot error: {:?}", err);
         std::process::exit(1);
-    }
-}
-
-fn print_supported_mcus() {
-    println!("Supported MCUs are:");
-    for name in supported_mcus() {
-        println!(" - {}", name);
     }
 }
