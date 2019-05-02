@@ -29,8 +29,10 @@ fn main() {
     let teensy = loop {
         match Teensy::connect(mcu.0, mcu.1) {
             Ok(t) => break t,
-            Err(_err) => {
+            Err(err) => {
                 eprintln!("Unable to open device");
+                // FIXME: Verbose
+                eprintln!("Connection error: {:?}", err);
                 std::process::exit(1);
             }
         }
@@ -39,7 +41,14 @@ fn main() {
     println!("Found HalfKey Bootloader");
 
     // boot only
-    teensy.boot();
+    // FIXME: Verbose
+    println!("Booting");
+    if let Err(err) = teensy.boot() {
+        eprintln!("Boot failed");
+        // FIXME: Verbose
+        eprintln!("Boot error: {:?}", err);
+        std::process::exit(1);
+    }
 }
 
 fn print_supported_mcus() {

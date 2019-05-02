@@ -20,24 +20,32 @@ use winapi::um::synchapi::*;
 use winapi::um::winbase::*;
 use winapi::um::winnt::*;
 
+#[derive(Debug)]
+pub enum SystemError {
+    CreateHandle,
+    IoPending,
+    NoBytesWritten,
+    OverlapError,
+}
+
 pub struct SysTeensy {
     teensy_handle: HANDLE,
     write_event: Option<HANDLE>,
 }
 
 impl SysTeensy {
-    pub fn connect() -> Result<Self, ()> {
+    pub fn connect() -> Result<Self, ConnectError> {
         Ok(SysTeensy {
             teensy_handle: unsafe { open_usb_device(TEENSY_VENDOR_ID, TEENSY_PRODUCT_ID)? },
             write_event: None,
         })
     }
 
-    unsafe fn __write(&mut self, buf: &[u8], timeout: u32) -> Result<(), ()> {
+    unsafe fn __write(&mut self, buf: &[u8], timeout: u32) -> Result<(), WriteError> {
         if let None = self.write_event {
             let event = CreateEventA(null_mut(), TRUE, TRUE, null());
             if event.is_null() {
-                return Err(());
+                return Err(WriteError::System(SystemError::CreateHandle));
             }
             self.write_event = Some(event);
         }
@@ -57,29 +65,29 @@ impl SysTeensy {
             null_mut(),
             &mut ov,
         ) == 0 {
-            if dbg!(GetLastError()) != ERROR_IO_PENDING {
-                return Err(());
+            if GetLastError() != ERROR_IO_PENDING {
+                return Err(WriteError::System(SystemError::IoPending));
             }
 
             let ret = WaitForSingleObject(event, timeout);
             if ret == WAIT_TIMEOUT {
                 CancelIo(self.teensy_handle);
-                return Err(());
+                return Err(WriteError::Timeout);
             }
         }
 
         let mut n = 0;
         if GetOverlappedResult(self.teensy_handle, &mut ov, &mut n, FALSE) == 0 {
-            return Err(());
+            return Err(WriteError::System(SystemError::OverlapError));
         }
         if n <= 0 {
-            return Err(());
+            return Err(WriteError::System(SystemError::NoBytesWritten));
         }
 
         Ok(())
     }
 
-    pub fn write(&mut self, buf: &[u8], timeout: Duration) -> Result<(), ()> {
+    pub fn write(&mut self, buf: &[u8], timeout: Duration) -> Result<(), WriteError> {
         fn time_left(begin: Instant, timeout: Duration) -> Duration {
             let passed = begin.elapsed();
             if passed < timeout {
@@ -96,10 +104,9 @@ impl SysTeensy {
             } {
                 return Ok(());
             }
-            println!("I sleep");
             sleep(Duration::from_millis(10));
         }
-        Err(())
+        Err(WriteError::Timeout)
     }
 }
 
@@ -111,7 +118,7 @@ impl Drop for SysTeensy {
     }
 }
 
-unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ()> {
+unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ConnectError> {
     let mut guid = Default::default();
     HidD_GetHidGuid(&mut guid);
 
@@ -122,7 +129,7 @@ unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ()> {
         DIGCF_PRESENT | DIGCF_DEVICEINTERFACE,
     );
     if info == INVALID_HANDLE_VALUE {
-        return Err(());
+        return Err(ConnectError::System(SystemError::CreateHandle));
     }
 
     let mut index = 0;
@@ -205,5 +212,5 @@ unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ()> {
         return Ok(h);
     }
 
-    Err(())
+    Err(ConnectError::DeviceNotFound)
 }
