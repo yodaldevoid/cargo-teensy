@@ -1,3 +1,6 @@
+use std::thread::sleep;
+use std::time::Duration;
+
 use rusty_loader::{parse_mcu, supported_mcus};
 use rusty_loader::usb::Teensy;
 
@@ -17,29 +20,38 @@ fn main() {
             .required(true)
             .possible_values(&supported_mcus())
         )
+        .arg(Arg::with_name("wait")
+            .long("wait")
+            .short("w")
+            .help("Wait for the device to appear")
+        )
         .arg(Arg::with_name("boot-only")
             .long("boot")
             .short("b")
-            .help("Only boot the Teensy, do not program")
+            .help("Only boot the device, do not program")
         )
         .get_matches();
 
     let mcu = match parse_mcu(matches.value_of("mcu").unwrap()) {
         Some(mcu) => mcu,
         None => {
-            eprintln!("Unkown Teensy name");
+            eprintln!("Unkown device name");
             std::process::exit(1);
         }
     };
 
+    let wait_for_device = !matches.is_present("wait");
     let teensy = loop {
         match Teensy::connect(mcu.0, mcu.1) {
             Ok(t) => break t,
             Err(err) => {
-                eprintln!("Unable to open device");
-                // FIXME: Verbose
-                eprintln!("Connection error: {:?}", err);
-                std::process::exit(1);
+                if wait_for_device {
+                    eprintln!("Unable to open device (hint: try --wait)");
+                    // FIXME: Verbose
+                    eprintln!("Connection error: {:?}", err);
+                    std::process::exit(1);
+                }
+                sleep(Duration::from_millis(250));
             }
         }
     };
