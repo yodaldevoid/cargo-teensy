@@ -20,7 +20,7 @@ use winapi::um::synchapi::*;
 use winapi::um::winbase::*;
 use winapi::um::winnt::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SystemError {
     CreateHandle,
     IoPending,

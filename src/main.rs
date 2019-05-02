@@ -2,7 +2,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use rusty_loader::{parse_mcu, supported_mcus};
-use rusty_loader::usb::Teensy;
+use rusty_loader::usb::{ConnectError, Teensy};
 
 use clap::{App, Arg};
 
@@ -40,20 +40,29 @@ fn main() {
         }
     };
 
-    let wait_for_device = !matches.is_present("wait");
+    let wait_for_device = matches.is_present("wait");
+    let mut waited = false;
     let teensy = loop {
         match Teensy::connect(mcu.0, mcu.1) {
             Ok(t) => break t,
             Err(err) => {
-                if wait_for_device {
+                if err == ConnectError::DeviceNotFound && !wait_for_device {
                     eprintln!("Unable to open device (hint: try --wait)");
+                    std::process::exit(1);
+                } else if err != ConnectError::DeviceNotFound {
                     // FIXME: Verbose
                     eprintln!("Connection error: {:?}", err);
                     std::process::exit(1);
                 }
-                sleep(Duration::from_millis(250));
             }
         }
+        if !waited {
+            // FIXME: Verbose
+            eprintln!("Waiting for device...");
+            eprintln!(" (hint: press the reset button)");
+            waited = true;
+        }
+        sleep(Duration::from_millis(250));
     };
 
     println!("Found HalfKey Bootloader");

@@ -18,13 +18,13 @@ use linux as sys;
 const TEENSY_VENDOR_ID: u16 = 0x16C0;
 const TEENSY_PRODUCT_ID: u16 = 0x0478;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConnectError {
     System(sys::SystemError),
     DeviceNotFound,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum WriteError {
     System(sys::SystemError),
     Timeout,
