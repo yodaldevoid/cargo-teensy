@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 clap = "^2.33"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "^0.3.7", features = ["impl-default", "fileapi", "ioapiset", "handleapi", "hidsdi", "setupapi", "synchapi", "winerror"] }

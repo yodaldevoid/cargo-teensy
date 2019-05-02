@@ -1,14 +1,16 @@
-/// MCU name, flash size
-static MCUS: [(&'static str, usize); 9] = [
-    ("at90usb162", 15872),
-    ("atmega32u4", 32256),
-    ("at90usb646", 64512),
-    ("at90usb1286", 130048),
-    ("mkl26z64", 63488),
-    ("mk20dx128", 131072),
-    ("mk20dx256", 262144),
-    ("mk64fx512", 524288),
-    ("mk66fx1m0", 1048576),
+pub mod usb;
+
+/// MCU name, flash size, block size
+static MCUS: [(&'static str, usize, usize); 9] = [
+    ("at90usb162", 15872, 128),
+    ("atmega32u4", 32256, 128),
+    ("at90usb646", 64512, 256),
+    ("at90usb1286", 130048, 256),
+    ("mkl26z64", 63488, 512),
+    ("mk20dx128", 131072, 1024),
+    ("mk20dx256", 262144, 1024),
+    ("mk64fx512", 524288, 1024),
+    ("mk66fx1m0", 1048576, 1024),
 ];
 
 /// Alias name, MCU name
@@ -22,9 +24,15 @@ static ALIASES: [(&'static str, &'static str); 7] = [
     ("TEENSY36", "mk66fx1m0"),
 ];
 
+// FIXME:
+pub fn parse_mcu(_arg: &'static str) -> Option<(usize, usize)> {
+    let mcu = MCUS[4];
+    Some((mcu.1, mcu.2))
+}
+
 pub fn supported_mcus() -> Vec<&'static str> {
     MCUS.iter()
-        .map(|&(s, _)| s)
+        .map(|&(s, ..)| s)
         .chain(ALIASES.iter().map(|&(s, _)| s))
         .collect()
 }
