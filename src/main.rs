@@ -6,6 +6,16 @@ use rusty_loader::usb::{ConnectError, Teensy};
 
 use clap::{App, Arg};
 
+static mut VERBOSE: bool = false;
+
+macro_rules! println_verbose {
+    ($($arg:tt)*) => ({
+        if unsafe { VERBOSE } {
+            println!($($arg)*);
+        }
+    })
+}
+
 fn main() {
     let matches = App::new("rusty_loader")
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
@@ -19,6 +29,10 @@ fn main() {
             .empty_values(false)
             .required(true)
             .possible_values(&supported_mcus())
+        )
+        .arg(Arg::with_name("verbose")
+            .long("verbose")
+            .short("v")
         )
         .arg(Arg::with_name("wait")
             .long("wait")
@@ -40,6 +54,10 @@ fn main() {
         }
     };
 
+    unsafe {
+        VERBOSE = matches.is_present("verbose");
+    }
+
     let wait_for_device = matches.is_present("wait");
     let mut waited = false;
     let teensy = loop {
@@ -50,33 +68,30 @@ fn main() {
                     eprintln!("Unable to open device (hint: try --wait)");
                     std::process::exit(1);
                 } else if err != ConnectError::DeviceNotFound {
-                    // FIXME: Verbose
-                    eprintln!("Connection error: {:?}", err);
+                    println_verbose!("Connection error: {:?}", err);
                     std::process::exit(1);
                 }
             }
         }
         if !waited {
-            // FIXME: Verbose
-            eprintln!("Waiting for device...");
-            eprintln!(" (hint: press the reset button)");
+            println_verbose!("Waiting for device...");
+            println_verbose!(" (hint: press the reset button)");
             waited = true;
         }
         sleep(Duration::from_millis(250));
     };
 
-    println!("Found HalfKey Bootloader");
+    println_verbose!("Found HalfKey Bootloader");
 
     if matches.is_present("boot-only") {
-        // FIXME: Verbose
-        println!("Booting");
+        println_verbose!("Booting");
         if let Err(err) = teensy.boot() {
             eprintln!("Boot failed");
-            // FIXME: Verbose
-            eprintln!("Boot error: {:?}", err);
+            println_verbose!("Boot error: {:?}", err);
             std::process::exit(1);
         }
     } else {
+        println_verbose!("Programming");
         unimplemented!()
     }
 }
