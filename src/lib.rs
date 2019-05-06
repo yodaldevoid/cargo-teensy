@@ -2,17 +2,29 @@ use ihex::record::Record as IHexRecord;
 
 pub mod usb;
 
+#[derive(Clone, Copy, Debug)]
+pub struct Mcu {
+    pub code_size: usize,
+    pub block_size: usize,
+}
+
+impl Mcu {
+    pub const fn new(code_size: usize, block_size: usize) -> Self {
+        Mcu { code_size, block_size }
+    }
+}
+
 /// MCU name, flash size, block size
-static MCUS: [(&'static str, usize, usize); 9] = [
-    ("at90usb162", 15872, 128),
-    ("atmega32u4", 32256, 128),
-    ("at90usb646", 64512, 256),
-    ("at90usb1286", 130048, 256),
-    ("mkl26z64", 63488, 512),
-    ("mk20dx128", 131072, 1024),
-    ("mk20dx256", 262144, 1024),
-    ("mk64fx512", 524288, 1024),
-    ("mk66fx1m0", 1048576, 1024),
+static MCUS: [(&'static str, Mcu); 9] = [
+    ("at90usb162", Mcu::new(15872, 128)),
+    ("atmega32u4", Mcu::new(32256, 128)),
+    ("at90usb646", Mcu::new(64512, 256)),
+    ("at90usb1286", Mcu::new(130048, 256)),
+    ("mkl26z64", Mcu::new(63488, 512)),
+    ("mk20dx128", Mcu::new(131072, 1024)),
+    ("mk20dx256", Mcu::new(262144, 1024)),
+    ("mk64fx512", Mcu::new(524288, 1024)),
+    ("mk66fx1m0", Mcu::new(1048576, 1024)),
 ];
 
 /// Alias name, MCU name
@@ -27,7 +39,7 @@ static ALIASES: [(&'static str, &'static str); 7] = [
 ];
 
 // FIXME:
-pub fn parse_mcu(arg: &str) -> Option<(usize, usize)> {
+pub fn parse_mcu(arg: &str) -> Option<Mcu> {
     let name = ALIASES.iter()
         .filter(|&&(alias, _)| {
             alias == arg
@@ -39,7 +51,7 @@ pub fn parse_mcu(arg: &str) -> Option<(usize, usize)> {
     MCUS.iter()
         .filter(|(n, ..)| *n == name)
         .next()
-        .map(|&(_, flash, block)| (flash, block))
+        .map(|&(_, mcu)| mcu)
 }
 
 pub fn supported_mcus() -> Vec<&'static str> {

@@ -109,10 +109,10 @@ fn main() {
                     file_path,
                     len,
                     1,
-                    len as f64 / mcu.0 as f64 * 100.0
+                    len as f64 / mcu.code_size as f64 * 100.0
                 );
 
-                match ihex_to_bytes(&ihex_records, mcu.0) {
+                match ihex_to_bytes(&ihex_records, mcu.code_size) {
                     Ok(binary) => Some(binary),
                     Err(_) => {
                         eprintln!("Failed to parse \"{}\" into binary form", file_path);
@@ -133,7 +133,7 @@ fn main() {
     let wait_for_device = matches.is_present("wait");
     let mut waited = false;
     let mut teensy = loop {
-        match Teensy::connect(mcu.0, mcu.1) {
+        match Teensy::connect(mcu.code_size, mcu.block_size) {
             Ok(t) => break t,
             Err(err) => {
                 if err == ConnectError::DeviceNotFound && !wait_for_device {
@@ -159,31 +159,31 @@ fn main() {
         if let Some(binary) = binary {
             println_verbose!("Programming");
 
-            let binary_chunks = binary.chunks_exact(mcu.1);
+            let binary_chunks = binary.chunks_exact(mcu.block_size);
             if !binary_chunks.remainder().is_empty() {
                 panic!("Somehow the addressed binary had a remainder")
             }
 
-            let mut buf = if mcu.1 == 256 {
-                Vec::with_capacity(mcu.1 + 2)
-            } else if mcu.1 == 512 || mcu.1 == 1024 {
-                Vec::with_capacity(mcu.1 + 64)
+            let mut buf = if mcu.block_size == 256 {
+                Vec::with_capacity(mcu.block_size + 2)
+            } else if mcu.block_size == 512 || mcu.block_size == 1024 {
+                Vec::with_capacity(mcu.block_size + 64)
             } else {
                 eprintln!("Unknown code/black size");
-                println_verbose!("code/block: {}/{}", mcu.0, mcu.1);
+                println_verbose!("code/block: {}/{}", mcu.code_size, mcu.block_size);
                 std::process::exit(1);
             };
 
-            for (addr, chunk) in (0..mcu.0).step_by(mcu.1).zip(binary_chunks) {
+            for (addr, chunk) in (0..mcu.code_size).step_by(mcu.block_size).zip(binary_chunks) {
                 if addr != 0 && chunk.iter().all(|&x| x == 0xFF) {
                     continue;
                 }
 
                 print_verbose!(".");
 
-                if mcu.1 <= 256 {
+                if mcu.block_size <= 256 {
                     buf.resize(2, 0);
-                    if mcu.0 < 0x10000 {
+                    if mcu.code_size < 0x10000 {
                         buf[0] = addr as u8;
                         buf[1] = (addr >> 8) as u8;
                     } else {
@@ -191,7 +191,7 @@ fn main() {
                         buf[1] = (addr >> 16) as u8;
                     }
                     buf.extend_from_slice(chunk);
-                } else if mcu.1 == 512 || mcu.1 == 1024 {
+                } else if mcu.block_size == 512 || mcu.block_size == 1024 {
                     buf.resize(64, 0);
                     buf[0] = addr as u8;
                     buf[1] = (addr >> 8) as u8;
@@ -199,7 +199,7 @@ fn main() {
                     buf.extend_from_slice(chunk);
                 } else {
                     eprintln!("Unknown code/black size");
-                    println_verbose!("code/block: {}/{}", mcu.0, mcu.1);
+                    println_verbose!("code/block: {}/{}", mcu.code_size, mcu.block_size);
                     std::process::exit(1);
                 };
 
@@ -212,6 +212,8 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+
+            println_verbose!();
         }
     }
 
