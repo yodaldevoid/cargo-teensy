@@ -169,8 +169,8 @@ fn main() {
             } else if mcu.block_size == 512 || mcu.block_size == 1024 {
                 Vec::with_capacity(mcu.block_size + 64)
             } else {
-                eprintln!("Unknown code/black size");
-                println_verbose!("code/block: {}/{}", mcu.code_size, mcu.block_size);
+                eprintln!("Unknown block size");
+                println_verbose!("block: {}", mcu.block_size);
                 std::process::exit(1);
             };
 
@@ -198,7 +198,7 @@ fn main() {
                     buf[2] = (addr >> 16) as u8;
                     buf.extend_from_slice(chunk);
                 } else {
-                    eprintln!("Unknown code/black size");
+                    eprintln!("Unknown code/block size");
                     println_verbose!("code/block: {}/{}", mcu.code_size, mcu.block_size);
                     std::process::exit(1);
                 };
