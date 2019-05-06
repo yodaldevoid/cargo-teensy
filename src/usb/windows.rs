@@ -154,7 +154,7 @@ unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ConnectError> {
 
         // malloc `details`
         let mut details_buf = Vec::<u8>::with_capacity(required_size as usize);
-        details_buf.extend(std::iter::repeat(0).take(required_size as usize));
+        details_buf.resize(required_size as usize, 0);
 
         let details = details_buf.as_mut_ptr() as PSP_DEVICE_INTERFACE_DETAIL_DATA_A;
         (*details).cbSize = size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_A>() as DWORD;

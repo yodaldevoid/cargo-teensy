@@ -3,7 +3,7 @@ use std::io::Read;
 use std::thread::sleep;
 use std::time::Duration;
 
-use rusty_loader::{parse_mcu, supported_mcus};
+use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
 use rusty_loader::usb::{ConnectError, Teensy};
 
 use clap::{App, Arg};
@@ -16,6 +16,14 @@ macro_rules! println_verbose {
     ($($arg:tt)*) => ({
         if unsafe { VERBOSE } {
             println!($($arg)*);
+        }
+    })
+}
+
+macro_rules! print_verbose {
+    ($($arg:tt)*) => ({
+        if unsafe { VERBOSE } {
+            print!($($arg)*);
         }
     })
 }
@@ -65,7 +73,9 @@ fn main() {
         VERBOSE = matches.is_present("verbose");
     }
 
-    let file = if !matches.is_present("boot-only") {
+    let boot_only = matches.is_present("boot-only");
+
+    let binary = if !boot_only {
         let file_path = matches.value_of("file").expect("No file path though boot-only not set");
         match File::open(file_path) {
             Ok(mut file) => {
@@ -102,7 +112,13 @@ fn main() {
                     len as f64 / mcu.0 as f64 * 100.0
                 );
 
-                Some(file)
+                match ihex_to_bytes(&ihex_records, mcu.0) {
+                    Ok(binary) => Some(binary),
+                    Err(_) => {
+                        eprintln!("Failed to parse \"{}\" into binary form", file_path);
+                        std::process::exit(1);
+                    }
+                }
             }
             Err(err) => {
                 eprintln!("Failed to open \"{}\"", file_path);
@@ -116,7 +132,7 @@ fn main() {
 
     let wait_for_device = matches.is_present("wait");
     let mut waited = false;
-    let teensy = loop {
+    let mut teensy = loop {
         match Teensy::connect(mcu.0, mcu.1) {
             Ok(t) => break t,
             Err(err) => {
@@ -139,15 +155,70 @@ fn main() {
 
     println_verbose!("Found HalfKey Bootloader");
 
-    if matches.is_present("boot-only") {
-        println_verbose!("Booting");
-        if let Err(err) = teensy.boot() {
-            eprintln!("Boot failed");
-            println_verbose!("Boot error: {:?}", err);
-            std::process::exit(1);
+    if !boot_only {
+        if let Some(binary) = binary {
+            println_verbose!("Programming");
+
+            let binary_chunks = binary.chunks_exact(mcu.1);
+            if !binary_chunks.remainder().is_empty() {
+                panic!("Somehow the addressed binary had a remainder")
+            }
+
+            let mut buf = if mcu.1 == 256 {
+                Vec::with_capacity(mcu.1 + 2)
+            } else if mcu.1 == 512 || mcu.1 == 1024 {
+                Vec::with_capacity(mcu.1 + 64)
+            } else {
+                eprintln!("Unknown code/black size");
+                println_verbose!("code/block: {}/{}", mcu.0, mcu.1);
+                std::process::exit(1);
+            };
+
+            for (addr, chunk) in (0..mcu.0).step_by(mcu.1).zip(binary_chunks) {
+                if addr != 0 && chunk.iter().all(|&x| x == 0xFF) {
+                    continue;
+                }
+
+                print_verbose!(".");
+
+                if mcu.1 <= 256 {
+                    buf.resize(2, 0);
+                    if mcu.0 < 0x10000 {
+                        buf[0] = addr as u8;
+                        buf[1] = (addr >> 8) as u8;
+                    } else {
+                        buf[0] = (addr >> 8) as u8;
+                        buf[1] = (addr >> 16) as u8;
+                    }
+                    buf.extend_from_slice(chunk);
+                } else if mcu.1 == 512 || mcu.1 == 1024 {
+                    buf.resize(64, 0);
+                    buf[0] = addr as u8;
+                    buf[1] = (addr >> 8) as u8;
+                    buf[2] = (addr >> 16) as u8;
+                    buf.extend_from_slice(chunk);
+                } else {
+                    eprintln!("Unknown code/black size");
+                    println_verbose!("code/block: {}/{}", mcu.0, mcu.1);
+                    std::process::exit(1);
+                };
+
+                if let Err(err) = teensy.write(
+                    &buf,
+                    Duration::from_millis(if addr == 0 { 5000 } else { 500 })
+                ) {
+                    eprintln!("Error writing to Teensy");
+                    println_verbose!("Error: {:?}", err);
+                    std::process::exit(1);
+                }
+            }
         }
-    } else {
-        println_verbose!("Programming");
-        unimplemented!()
+    }
+
+    println_verbose!("Booting");
+    if let Err(err) = teensy.boot() {
+        eprintln!("Boot failed");
+        println_verbose!("Boot error: {:?}", err);
+        std::process::exit(1);
     }
 }

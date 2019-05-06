@@ -1,3 +1,5 @@
+use ihex::record::Record as IHexRecord;
+
 pub mod usb;
 
 /// MCU name, flash size, block size
@@ -74,4 +76,30 @@ mod tests {
         let names = supported_mcus();
         assert_eq!(expected_names, names);
     }
+}
+
+pub fn ihex_to_bytes(recs: &[IHexRecord], code_size: usize) -> Result<Vec<u8>, ()> {
+    let mut base_address = 0;
+    let mut bytes = vec![0xFF; code_size];
+
+    for rec in recs {
+        match rec {
+            IHexRecord::Data { offset, value } => {
+                if base_address + *offset as usize + value.len() >= code_size {
+                    return Err(());
+                }
+
+                for (n, b) in value.iter().enumerate() {
+                    bytes[base_address + *offset as usize + n] = *b;
+                }
+            }
+            IHexRecord::ExtendedSegmentAddress(base) => base_address = (*base as usize) << 4,
+            IHexRecord::ExtendedLinearAddress(base) => base_address = (*base as usize) << 16,
+            IHexRecord::EndOfFile => break,
+            IHexRecord::StartLinearAddress(_) |
+            IHexRecord::StartSegmentAddress { .. } => return Err(()),
+        }
+    }
+
+    Ok(bytes)
 }
