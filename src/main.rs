@@ -4,7 +4,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
-use rusty_loader::usb::{ConnectError, Teensy};
+use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
 
 use clap::{App, Arg};
 use ihex::reader::Reader as IHexReader;
@@ -159,57 +159,20 @@ fn main() {
         if let Some(binary) = binary {
             println_verbose!("Programming");
 
-            let binary_chunks = binary.chunks_exact(mcu.block_size);
-            if !binary_chunks.remainder().is_empty() {
-                panic!("Somehow the addressed binary had a remainder")
-            }
-
-            let mut buf = if mcu.block_size == 256 {
-                Vec::with_capacity(mcu.block_size + 2)
-            } else if mcu.block_size == 512 || mcu.block_size == 1024 {
-                Vec::with_capacity(mcu.block_size + 64)
-            } else {
-                eprintln!("Unknown block size");
-                println_verbose!("block: {}", mcu.block_size);
-                std::process::exit(1);
-            };
-
-            for (addr, chunk) in (0..mcu.code_size).step_by(mcu.block_size).zip(binary_chunks) {
-                if addr != 0 && chunk.iter().all(|&x| x == 0xFF) {
-                    continue;
-                }
-
-                print_verbose!(".");
-
-                if mcu.block_size <= 256 {
-                    buf.resize(2, 0);
-                    if mcu.code_size < 0x10000 {
-                        buf[0] = addr as u8;
-                        buf[1] = (addr >> 8) as u8;
-                    } else {
-                        buf[0] = (addr >> 8) as u8;
-                        buf[1] = (addr >> 16) as u8;
+            if let Err(err) = teensy.program(&binary, |_| print_verbose!(".")) {
+                match err {
+                    ProgramError::BinaryRemainder =>
+                        panic!("Somehow the addressed binary had a remainder"),
+                    ProgramError::UnknownBlockSize(size) => {
+                        eprintln!("Unknown block size");
+                        println_verbose!("block: {}", size);
+                        std::process::exit(1);
                     }
-                    buf.extend_from_slice(chunk);
-                } else if mcu.block_size == 512 || mcu.block_size == 1024 {
-                    buf.resize(64, 0);
-                    buf[0] = addr as u8;
-                    buf[1] = (addr >> 8) as u8;
-                    buf[2] = (addr >> 16) as u8;
-                    buf.extend_from_slice(chunk);
-                } else {
-                    eprintln!("Unknown code/block size");
-                    println_verbose!("code/block: {}/{}", mcu.code_size, mcu.block_size);
-                    std::process::exit(1);
-                };
-
-                if let Err(err) = teensy.write(
-                    &buf,
-                    Duration::from_millis(if addr == 0 { 5000 } else { 500 })
-                ) {
-                    eprintln!("Error writing to Teensy");
-                    println_verbose!("Error: {:?}", err);
-                    std::process::exit(1);
+                    ProgramError::WriteError(err) => {
+                        eprintln!("Error writing to Teensy");
+                        println_verbose!("Error: {:?}", err);
+                        std::process::exit(1);
+                    }
                 }
             }
 
