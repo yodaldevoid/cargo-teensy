@@ -51,12 +51,19 @@ fn main() {
             .short("w")
             .help("Wait for the device to appear")
         )
+        .arg(Arg::with_name("no-reboot")
+            .long("no-reboot")
+            .short("n")
+            .help("No reboot after programming")
+            .requires("file")
+        )
         .arg(Arg::with_name("boot-only")
             .long("boot")
             .short("b")
             .help("Only boot the device, do not program")
         )
         .arg(Arg::with_name("file")
+            .conflicts_with("boot-only")
             .required_unless("boot-only")
         )
         .get_matches();
@@ -180,10 +187,12 @@ fn main() {
         }
     }
 
-    println_verbose!("Booting");
-    if let Err(err) = teensy.boot() {
-        eprintln!("Boot failed");
-        println_verbose!("Boot error: {:?}", err);
-        std::process::exit(1);
+    if !matches.is_present("no-reboot") || boot_only {
+        println_verbose!("Booting");
+        if let Err(err) = teensy.boot() {
+            eprintln!("Boot failed");
+            println_verbose!("Boot error: {:?}", err);
+            std::process::exit(1);
+        }
     }
 }
