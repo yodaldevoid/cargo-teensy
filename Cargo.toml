@@ -7,6 +7,10 @@ edition = "2018"
 [dependencies]
 clap = "^2.33"
 ihex = "^1.1"
+rusb = { version = "^0.5", optional = true }
+
+[features]
+libusb = ["rusb"]
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "^0.3.7"

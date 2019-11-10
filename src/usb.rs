@@ -2,20 +2,20 @@ use std::time::Duration;
 
 use crate::Mcu;
 
-#[cfg(windows)]
+#[cfg(all(windows, not(feature="libusb")))]
 mod windows;
-#[cfg(windows)]
+#[cfg(all(windows, not(feature="libusb")))]
 use windows as sys;
 
-#[cfg(all(unix, target_os="macos"))]
+#[cfg(all(all(unix, target_os="macos"), not(feature="libusb")))]
 mod macos;
-#[cfg(all(unix, target_os="macos"))]
+#[cfg(all(all(unix, target_os="macos"), not(feature="libusb")))]
 use macos as sys;
 
-#[cfg(all(unix, not(target_os="macos")))]
-mod linux;
-#[cfg(all(unix, not(target_os="macos")))]
-use linux as sys;
+#[cfg(any(all(unix, not(target_os="macos")), feature="libusb"))]
+mod libusb;
+#[cfg(any(all(unix, not(target_os="macos")), feature="libusb"))]
+use libusb as sys;
 
 const TEENSY_VENDOR_ID: u16 = 0x16C0;
 const TEENSY_PRODUCT_ID: u16 = 0x0478;
