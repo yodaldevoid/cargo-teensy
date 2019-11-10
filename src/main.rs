@@ -140,7 +140,7 @@ fn main() {
     let wait_for_device = matches.is_present("wait");
     let mut waited = false;
     let mut teensy = loop {
-        match Teensy::connect(mcu.code_size, mcu.block_size) {
+        match Teensy::connect(mcu) {
             Ok(t) => break t,
             Err(err) => {
                 if err == ConnectError::DeviceNotFound && !wait_for_device {

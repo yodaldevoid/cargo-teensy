@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::Mcu;
+
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -47,22 +49,19 @@ pub struct Teensy {
     sys: sys::SysTeensy,
     code_size: usize,
     block_size: usize,
-    write_size: usize,
+    header_size: usize,
 }
 
 impl Teensy {
-    pub fn connect(code_size: usize, block_size: usize) -> Result<Self, ConnectError> {
-        let write_size = if block_size == 512 || block_size == 1024 {
-            block_size + 64
-        } else {
-            block_size + 2
-        };
+    pub fn connect(mcu: Mcu) -> Result<Self, ConnectError> {
+        let header_size =
+            if mcu.block_size == 512 || mcu.block_size == 1024 { 64 } else { 2 };
 
         Ok(Self {
             sys: sys::SysTeensy::connect(TEENSY_VENDOR_ID, TEENSY_PRODUCT_ID)?,
-            code_size,
-            block_size,
-            write_size,
+            code_size: mcu.code_size,
+            block_size: mcu.block_size,
+            header_size,
         })
     }
 
@@ -71,8 +70,8 @@ impl Teensy {
     }
 
     pub fn boot(&mut self) -> Result<(), WriteError> {
-        let mut buf = Vec::<u8>::with_capacity(self.write_size);
-        buf.extend(std::iter::repeat(0).take(self.write_size as usize));
+        let mut buf = Vec::<u8>::with_capacity(self.write_size());
+        buf.extend(std::iter::repeat(0).take(self.write_size() as usize));
         buf[0] = 0xff;
         buf[1] = 0xff;
         buf[2] = 0xff;
@@ -89,7 +88,7 @@ impl Teensy {
             return Err(ProgramError::BinaryRemainder);
         }
 
-        let mut buf = Vec::with_capacity(self.write_size);
+        let mut buf = Vec::with_capacity(self.write_size());
         for (addr, chunk) in (0..self.code_size).step_by(self.block_size).zip(binary_chunks) {
             if addr != 0 && chunk.iter().all(|&x| x == 0xFF) {
                 continue;
@@ -119,5 +118,9 @@ impl Teensy {
         }
 
         Ok(())
+    }
+
+    fn write_size(&self) -> usize {
+        self.block_size + self.header_size
     }
 }
