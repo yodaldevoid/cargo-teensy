@@ -3,10 +3,7 @@ use std::ptr::{null, null_mut};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use crate::usb::*;
-
 use winapi::ctypes::c_void;
-//use winapi::shared::hidclass::*;
 use winapi::shared::hidsdi::*;
 use winapi::shared::minwindef::*;
 use winapi::shared::winerror::*;
@@ -19,6 +16,8 @@ use winapi::um::setupapi::*;
 use winapi::um::synchapi::*;
 use winapi::um::winbase::*;
 use winapi::um::winnt::*;
+
+use crate::usb::*;
 
 #[derive(Debug, PartialEq)]
 pub enum SystemError {

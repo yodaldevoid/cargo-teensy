@@ -3,12 +3,12 @@ use std::io::Read;
 use std::thread::sleep;
 use std::time::Duration;
 
-use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
-use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
-
 use clap::{App, Arg};
 use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
+
+use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
+use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
 
 static mut VERBOSE: bool = false;
 
