@@ -26,10 +26,22 @@ pub enum ConnectError {
     DeviceNotFound,
 }
 
+impl From<sys::SystemError> for ConnectError {
+    fn from(err: sys::SystemError) -> Self {
+        ConnectError::System(err)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum WriteError {
     System(sys::SystemError),
     Timeout,
+}
+
+impl From<sys::SystemError> for WriteError {
+    fn from(err: sys::SystemError) -> Self {
+        WriteError::System(err)
+    }
 }
 
 #[derive(Debug, PartialEq)]

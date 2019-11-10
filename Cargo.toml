@@ -8,5 +8,9 @@ edition = "2018"
 clap = "^2.33"
 ihex = "^1.1"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "^0.3.7", features = ["impl-default", "fileapi", "ioapiset", "handleapi", "hidsdi", "setupapi", "synchapi", "winerror"] }
+[target.'cfg(windows)'.dependencies.winapi]
+version = "^0.3.7"
+features = ["impl-default", "fileapi", "ioapiset", "handleapi", "hidsdi", "setupapi", "synchapi", "winerror"]
+
+[target.'cfg(all(unix, not(target_os="macos")))'.dependencies]
+rusb = "^0.5"
