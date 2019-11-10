@@ -55,14 +55,13 @@ impl SysTeensy {
         }
 
         let begin = Instant::now();
-        let mut num_written = 0;
         while begin.elapsed() < timeout {
-            num_written += match self.teensy_handle.write_control(
+            let num_written = match self.teensy_handle.write_control(
                 0x21,
                 9,
                 0x0200,
                 0,
-                &buf[num_written..],
+                buf,
                 time_left(begin, timeout)
             ) {
                 Ok(n) => n,
