@@ -58,7 +58,12 @@ impl Teensy {
             block_size + 2
         };
 
-        Ok(Teensy { sys: sys::SysTeensy::connect()?, code_size, block_size, write_size })
+        Ok(Self {
+            sys: sys::SysTeensy::connect(TEENSY_VENDOR_ID, TEENSY_PRODUCT_ID)?,
+            code_size,
+            block_size,
+            write_size,
+        })
     }
 
     pub fn write(&mut self, buf: &[u8], timeout: Duration) -> Result<(), WriteError> {

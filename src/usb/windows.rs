@@ -34,9 +34,9 @@ pub struct SysTeensy {
 }
 
 impl SysTeensy {
-    pub fn connect() -> Result<Self, ConnectError> {
+    pub fn connect(vid: u16, pid: u16) -> Result<Self, ConnectError> {
         Ok(SysTeensy {
-            teensy_handle: unsafe { open_usb_device(TEENSY_VENDOR_ID, TEENSY_PRODUCT_ID)? },
+            teensy_handle: unsafe { open_usb_device(vid, pid)? },
             write_event: None,
         })
     }
