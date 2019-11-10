@@ -28,12 +28,13 @@ static MCUS: [(&'static str, Mcu); 9] = [
 ];
 
 /// Alias name, MCU name
-static ALIASES: [(&'static str, &'static str); 7] = [
+static ALIASES: [(&'static str, &'static str); 8] = [
     ("TEENSY2", "atmega32u4"),
     ("TEENSY2PP", "at90usb1286"),
     ("TEENSYLC", "mkl26z64"),
     ("TEENSY30", "mk20dx128"),
     ("TEENSY31", "mk20dx256"),
+    ("TEENSY32", "mk20dx256"),
     ("TEENSY35", "mk64fx512"),
     ("TEENSY36", "mk66fx1m0"),
 ];
@@ -82,6 +83,7 @@ mod tests {
             "TEENSYLC",
             "TEENSY30",
             "TEENSY31",
+            "TEENSY32",
             "TEENSY35",
             "TEENSY36",
         ];
