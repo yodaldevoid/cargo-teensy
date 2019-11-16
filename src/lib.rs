@@ -6,15 +6,17 @@ pub mod usb;
 pub struct Mcu {
     pub code_size: usize,
     pub block_size: usize,
+    pub flash_offset: usize,
 }
 
 /// MCU name, flash size, block size
-static MCUS: [(&'static str, Mcu); 9] = [
+static MCUS: [(&'static str, Mcu); 10] = [
     (
         "at90usb162",
         Mcu {
             code_size: 15872,
             block_size: 128,
+            flash_offset: 0,
         },
     ),
     (
@@ -22,6 +24,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 32256,
             block_size: 128,
+            flash_offset: 0,
         },
     ),
     (
@@ -29,6 +32,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 64512,
             block_size: 256,
+            flash_offset: 0,
         },
     ),
     (
@@ -36,6 +40,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 130048,
             block_size: 256,
+            flash_offset: 0,
         },
     ),
     (
@@ -43,6 +48,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 63488,
             block_size: 512,
+            flash_offset: 0,
         },
     ),
     (
@@ -50,6 +56,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 131072,
             block_size: 1024,
+            flash_offset: 0,
         },
     ),
     (
@@ -57,6 +64,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 262144,
             block_size: 1024,
+            flash_offset: 0,
         },
     ),
     (
@@ -64,6 +72,7 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 524288,
             block_size: 1024,
+            flash_offset: 0,
         },
     ),
     (
@@ -71,12 +80,21 @@ static MCUS: [(&'static str, Mcu); 9] = [
         Mcu {
             code_size: 1048576,
             block_size: 1024,
+            flash_offset: 0,
+        },
+    ),
+    (
+        "imxrt1062",
+        Mcu {
+            code_size: 2031616,
+            block_size: 1024,
+            flash_offset: 0x60000000,
         },
     ),
 ];
 
 /// Alias name, MCU name
-static ALIASES: [(&'static str, &'static str); 8] = [
+static ALIASES: [(&'static str, &'static str); 9] = [
     ("TEENSY2", "atmega32u4"),
     ("TEENSY2PP", "at90usb1286"),
     ("TEENSYLC", "mkl26z64"),
@@ -85,6 +103,7 @@ static ALIASES: [(&'static str, &'static str); 8] = [
     ("TEENSY32", "mk20dx256"),
     ("TEENSY35", "mk64fx512"),
     ("TEENSY36", "mk66fx1m0"),
+    ("TEENSY40", "imxrt1062"),
 ];
 
 // FIXME:
@@ -125,6 +144,7 @@ mod tests {
             "mk20dx256",
             "mk64fx512",
             "mk66fx1m0",
+            "imxrt1062",
             "TEENSY2",
             "TEENSY2PP",
             "TEENSYLC",
@@ -133,6 +153,7 @@ mod tests {
             "TEENSY32",
             "TEENSY35",
             "TEENSY36",
+            "TEENSY40",
         ];
         let names = supported_mcus();
         assert_eq!(expected_names, names);
@@ -155,7 +176,9 @@ pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<Vec<u8>, ()> {
                 }
             }
             IHexRecord::ExtendedSegmentAddress(base) => base_address = (*base as usize) << 4,
-            IHexRecord::ExtendedLinearAddress(base) => base_address = (*base as usize) << 16,
+            IHexRecord::ExtendedLinearAddress(base) => {
+                base_address = ((*base as usize) << 16) - mcu.flash_offset;
+            }
             IHexRecord::EndOfFile => break,
             IHexRecord::StartLinearAddress(_) | IHexRecord::StartSegmentAddress { .. } => {
                 return Err(())
