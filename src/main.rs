@@ -126,7 +126,7 @@ fn main() {
                     len as f64 / mcu.code_size as f64 * 100.0
                 );
 
-                match ihex_to_bytes(&ihex_records, mcu.code_size) {
+                match ihex_to_bytes(&ihex_records, &mcu) {
                     Ok(binary) => Some(binary),
                     Err(_) => {
                         eprintln!("Failed to parse \"{}\" into binary form", file_path);

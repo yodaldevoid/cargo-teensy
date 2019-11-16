@@ -8,26 +8,71 @@ pub struct Mcu {
     pub block_size: usize,
 }
 
-impl Mcu {
-    pub const fn new(code_size: usize, block_size: usize) -> Self {
-        Mcu {
-            code_size,
-            block_size,
-        }
-    }
-}
-
 /// MCU name, flash size, block size
 static MCUS: [(&'static str, Mcu); 9] = [
-    ("at90usb162", Mcu::new(15872, 128)),
-    ("atmega32u4", Mcu::new(32256, 128)),
-    ("at90usb646", Mcu::new(64512, 256)),
-    ("at90usb1286", Mcu::new(130048, 256)),
-    ("mkl26z64", Mcu::new(63488, 512)),
-    ("mk20dx128", Mcu::new(131072, 1024)),
-    ("mk20dx256", Mcu::new(262144, 1024)),
-    ("mk64fx512", Mcu::new(524288, 1024)),
-    ("mk66fx1m0", Mcu::new(1048576, 1024)),
+    (
+        "at90usb162",
+        Mcu {
+            code_size: 15872,
+            block_size: 128,
+        },
+    ),
+    (
+        "atmega32u4",
+        Mcu {
+            code_size: 32256,
+            block_size: 128,
+        },
+    ),
+    (
+        "at90usb646",
+        Mcu {
+            code_size: 64512,
+            block_size: 256,
+        },
+    ),
+    (
+        "at90usb1286",
+        Mcu {
+            code_size: 130048,
+            block_size: 256,
+        },
+    ),
+    (
+        "mkl26z64",
+        Mcu {
+            code_size: 63488,
+            block_size: 512,
+        },
+    ),
+    (
+        "mk20dx128",
+        Mcu {
+            code_size: 131072,
+            block_size: 1024,
+        },
+    ),
+    (
+        "mk20dx256",
+        Mcu {
+            code_size: 262144,
+            block_size: 1024,
+        },
+    ),
+    (
+        "mk64fx512",
+        Mcu {
+            code_size: 524288,
+            block_size: 1024,
+        },
+    ),
+    (
+        "mk66fx1m0",
+        Mcu {
+            code_size: 1048576,
+            block_size: 1024,
+        },
+    ),
 ];
 
 /// Alias name, MCU name
@@ -94,14 +139,14 @@ mod tests {
     }
 }
 
-pub fn ihex_to_bytes(recs: &[IHexRecord], code_size: usize) -> Result<Vec<u8>, ()> {
+pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<Vec<u8>, ()> {
     let mut base_address = 0;
-    let mut bytes = vec![0xFF; code_size];
+    let mut bytes = vec![0xFF; mcu.code_size];
 
     for rec in recs {
         match rec {
             IHexRecord::Data { offset, value } => {
-                if base_address + *offset as usize + value.len() >= code_size {
+                if base_address + *offset as usize + value.len() >= mcu.code_size {
                     return Err(());
                 }
 
