@@ -10,7 +10,10 @@ pub struct Mcu {
 
 impl Mcu {
     pub const fn new(code_size: usize, block_size: usize) -> Self {
-        Mcu { code_size, block_size }
+        Mcu {
+            code_size,
+            block_size,
+        }
     }
 }
 
@@ -41,10 +44,9 @@ static ALIASES: [(&'static str, &'static str); 8] = [
 
 // FIXME:
 pub fn parse_mcu(arg: &str) -> Option<Mcu> {
-    let name = ALIASES.iter()
-        .filter(|&&(alias, _)| {
-            alias == arg
-        })
+    let name = ALIASES
+        .iter()
+        .filter(|&&(alias, _)| alias == arg)
         .next()
         .map(|&(_, n)| n)
         .unwrap_or(arg);
@@ -110,8 +112,9 @@ pub fn ihex_to_bytes(recs: &[IHexRecord], code_size: usize) -> Result<Vec<u8>, (
             IHexRecord::ExtendedSegmentAddress(base) => base_address = (*base as usize) << 4,
             IHexRecord::ExtendedLinearAddress(base) => base_address = (*base as usize) << 16,
             IHexRecord::EndOfFile => break,
-            IHexRecord::StartLinearAddress(_) |
-            IHexRecord::StartSegmentAddress { .. } => return Err(()),
+            IHexRecord::StartLinearAddress(_) | IHexRecord::StartSegmentAddress { .. } => {
+                return Err(())
+            }
         }
     }
 

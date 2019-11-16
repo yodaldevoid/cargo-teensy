@@ -63,7 +63,8 @@ impl SysTeensy {
             tempbuf.len() as DWORD,
             null_mut(),
             &mut ov,
-        ) == 0 {
+        ) == 0
+        {
             if GetLastError() != ERROR_IO_PENDING {
                 return Err(WriteError::System(SystemError::IoPending));
             }
@@ -98,9 +99,9 @@ impl SysTeensy {
 
         let begin = Instant::now();
         while begin.elapsed() < timeout {
-            if let Ok(_) = unsafe {
-                self.__write(buf, time_left(begin, timeout).as_millis() as u32)
-            } {
+            if let Ok(_) =
+                unsafe { self.__write(buf, time_left(begin, timeout).as_millis() as u32) }
+            {
                 return Ok(());
             }
             sleep(Duration::from_millis(10));
@@ -135,7 +136,7 @@ unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ConnectError> {
     loop {
         let mut iface = SP_DEVICE_INTERFACE_DATA::default();
         iface.cbSize = size_of::<SP_DEVICE_INTERFACE_DATA>() as DWORD;
-        if SetupDiEnumDeviceInterfaces(info, null_mut(), &guid, index, &mut iface) == 0  {
+        if SetupDiEnumDeviceInterfaces(info, null_mut(), &guid, index, &mut iface) == 0 {
             SetupDiDestroyDeviceInfoList(info);
             break;
         }
@@ -164,7 +165,8 @@ unsafe fn open_usb_device(vid: u16, pid: u16) -> Result<HANDLE, ConnectError> {
             required_size,
             null_mut(),
             null_mut(),
-        ) == 0 {
+        ) == 0
+        {
             // free `details`
             Vec::from_raw_parts(
                 details as *mut u8,

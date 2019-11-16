@@ -7,8 +7,8 @@ use clap::{App, Arg};
 use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
 
-use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
 use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
+use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
 
 static mut VERBOSE: bool = false;
 
@@ -33,38 +33,40 @@ fn main() {
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
         .author("Gabriel \"yodaldevoid\" Smith <ga29smith@gmail.com>")
         .about("A rust rewrite of teensy_loader_cli")
-        .arg(Arg::with_name("mcu")
-            .long("mcu")
-            .short("m")
-            .help("The microcontroller to operate on")
-            .takes_value(true)
-            .empty_values(false)
-            .required(true)
-            .possible_values(&supported_mcus())
+        .arg(
+            Arg::with_name("mcu")
+                .long("mcu")
+                .short("m")
+                .help("The microcontroller to operate on")
+                .takes_value(true)
+                .empty_values(false)
+                .required(true)
+                .possible_values(&supported_mcus()),
         )
-        .arg(Arg::with_name("verbose")
-            .long("verbose")
-            .short("v")
+        .arg(Arg::with_name("verbose").long("verbose").short("v"))
+        .arg(
+            Arg::with_name("wait")
+                .long("wait")
+                .short("w")
+                .help("Wait for the device to appear"),
         )
-        .arg(Arg::with_name("wait")
-            .long("wait")
-            .short("w")
-            .help("Wait for the device to appear")
+        .arg(
+            Arg::with_name("no-reboot")
+                .long("no-reboot")
+                .short("n")
+                .help("No reboot after programming")
+                .requires("file"),
         )
-        .arg(Arg::with_name("no-reboot")
-            .long("no-reboot")
-            .short("n")
-            .help("No reboot after programming")
-            .requires("file")
+        .arg(
+            Arg::with_name("boot-only")
+                .long("boot")
+                .short("b")
+                .help("Only boot the device, do not program"),
         )
-        .arg(Arg::with_name("boot-only")
-            .long("boot")
-            .short("b")
-            .help("Only boot the device, do not program")
-        )
-        .arg(Arg::with_name("file")
-            .conflicts_with("boot-only")
-            .required_unless("boot-only")
+        .arg(
+            Arg::with_name("file")
+                .conflicts_with("boot-only")
+                .required_unless("boot-only"),
         )
         .get_matches();
 
@@ -83,7 +85,9 @@ fn main() {
     let boot_only = matches.is_present("boot-only");
 
     let binary = if !boot_only {
-        let file_path = matches.value_of("file").expect("No file path though boot-only not set");
+        let file_path = matches
+            .value_of("file")
+            .expect("No file path though boot-only not set");
         match File::open(file_path) {
             Ok(mut file) => {
                 // Check the binary size
@@ -103,11 +107,14 @@ fn main() {
                         std::process::exit(1);
                     }
                 };
-                let len: usize = ihex_records.iter()
-                    .map(|rec| if let IHexRecord::Data { value, .. } = rec {
-                        value.len()
-                    } else {
-                        0
+                let len: usize = ihex_records
+                    .iter()
+                    .map(|rec| {
+                        if let IHexRecord::Data { value, .. } = rec {
+                            value.len()
+                        } else {
+                            0
+                        }
                     })
                     .sum();
 
@@ -168,8 +175,9 @@ fn main() {
 
             if let Err(err) = teensy.program(&binary, |_| print_verbose!(".")) {
                 match err {
-                    ProgramError::BinaryRemainder =>
-                        panic!("Somehow the addressed binary had a remainder"),
+                    ProgramError::BinaryRemainder => {
+                        panic!("Somehow the addressed binary had a remainder")
+                    }
                     ProgramError::UnknownBlockSize(size) => {
                         eprintln!("Unknown block size");
                         println_verbose!("block: {}", size);

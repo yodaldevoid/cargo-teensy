@@ -2,19 +2,19 @@ use std::time::Duration;
 
 use crate::Mcu;
 
-#[cfg(all(windows, not(feature="libusb")))]
+#[cfg(all(windows, not(feature = "libusb")))]
 mod windows;
-#[cfg(all(windows, not(feature="libusb")))]
+#[cfg(all(windows, not(feature = "libusb")))]
 use windows as sys;
 
-#[cfg(all(all(unix, target_os="macos"), not(feature="libusb")))]
+#[cfg(all(all(unix, target_os = "macos"), not(feature = "libusb")))]
 mod macos;
-#[cfg(all(all(unix, target_os="macos"), not(feature="libusb")))]
+#[cfg(all(all(unix, target_os = "macos"), not(feature = "libusb")))]
 use macos as sys;
 
-#[cfg(any(all(unix, not(target_os="macos")), feature="libusb"))]
+#[cfg(any(all(unix, not(target_os = "macos")), feature = "libusb"))]
 mod libusb;
-#[cfg(any(all(unix, not(target_os="macos")), feature="libusb"))]
+#[cfg(any(all(unix, not(target_os = "macos")), feature = "libusb"))]
 use libusb as sys;
 
 const TEENSY_VENDOR_ID: u16 = 0x16C0;
@@ -66,8 +66,11 @@ pub struct Teensy {
 
 impl Teensy {
     pub fn connect(mcu: Mcu) -> Result<Self, ConnectError> {
-        let header_size =
-            if mcu.block_size == 512 || mcu.block_size == 1024 { 64 } else { 2 };
+        let header_size = if mcu.block_size == 512 || mcu.block_size == 1024 {
+            64
+        } else {
+            2
+        };
 
         Ok(Self {
             sys: sys::SysTeensy::connect(TEENSY_VENDOR_ID, TEENSY_PRODUCT_ID)?,
@@ -90,18 +93,17 @@ impl Teensy {
         self.write(&buf, Duration::from_millis(500))
     }
 
-    pub fn program(
-        &mut self,
-        binary: &[u8],
-        feedback: impl Fn(usize)
-    ) -> Result<(), ProgramError> {
+    pub fn program(&mut self, binary: &[u8], feedback: impl Fn(usize)) -> Result<(), ProgramError> {
         let binary_chunks = binary.chunks_exact(self.block_size);
         if !binary_chunks.remainder().is_empty() {
             return Err(ProgramError::BinaryRemainder);
         }
 
         let mut buf = Vec::with_capacity(self.write_size());
-        for (addr, chunk) in (0..self.code_size).step_by(self.block_size).zip(binary_chunks) {
+        for (addr, chunk) in (0..self.code_size)
+            .step_by(self.block_size)
+            .zip(binary_chunks)
+        {
             if addr != 0 && chunk.iter().all(|&x| x == 0xFF) {
                 continue;
             }
@@ -126,7 +128,10 @@ impl Teensy {
                 buf.extend_from_slice(chunk);
             }
 
-            self.write(&buf, Duration::from_millis(if addr == 0 { 5000 } else { 500 }))?;
+            self.write(
+                &buf,
+                Duration::from_millis(if addr == 0 { 5000 } else { 500 }),
+            )?;
         }
 
         Ok(())

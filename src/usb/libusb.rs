@@ -1,7 +1,7 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use rusb::{GlobalContext, DeviceHandle, UsbContext};
+use rusb::{DeviceHandle, GlobalContext, UsbContext};
 
 use crate::usb::*;
 
@@ -41,7 +41,9 @@ impl SysTeensy {
 
         device.claim_interface(0)?;
 
-        Ok(SysTeensy { teensy_handle: device })
+        Ok(SysTeensy {
+            teensy_handle: device,
+        })
     }
 
     pub fn write(&mut self, buf: &[u8], timeout: Duration) -> Result<(), WriteError> {
@@ -62,7 +64,7 @@ impl SysTeensy {
                 0x0200,
                 0,
                 buf,
-                time_left(begin, timeout)
+                time_left(begin, timeout),
             ) {
                 Ok(n) => n,
                 Err(rusb::Error::Timeout) => 0,
@@ -70,7 +72,7 @@ impl SysTeensy {
             };
 
             if num_written >= buf.len() {
-                return Ok(())
+                return Ok(());
             }
             sleep(Duration::from_millis(10));
         }
