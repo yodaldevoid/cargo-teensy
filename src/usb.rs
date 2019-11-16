@@ -19,6 +19,7 @@ use libusb as sys;
 
 const TEENSY_VENDOR_ID: u16 = 0x16C0;
 const TEENSY_PRODUCT_ID: u16 = 0x0478;
+const SOFT_REBOOTER_PRODUCT_ID: u16 = 0x0483;
 
 #[derive(Debug, PartialEq)]
 pub enum ConnectError {
@@ -134,5 +135,31 @@ impl Teensy {
 
     fn write_size(&self) -> usize {
         self.block_size + self.header_size
+    }
+}
+
+pub struct SoftRebootor {
+    sys: sys::SysTeensy,
+}
+
+impl SoftRebootor {
+    pub fn connect() -> Result<Self, ConnectError> {
+        Ok(Self {
+            sys: sys::SysTeensy::connect(TEENSY_VENDOR_ID, SOFT_REBOOTER_PRODUCT_ID)?,
+        })
+    }
+
+    pub fn reboot(&mut self) -> Result<(), WriteError> {
+        unimplemented!()
+        /*
+        request_type: 0x21, // Request type: host to device, class, interface
+        request: 0x20, // Request: CDC set line coding
+        value: 0, // Value: n/a
+        index: 0, // Index: interface 0
+        length: 1,
+        data: 134,
+        */
+        //let buf = [134];
+        //self.sys.write(&buf, Duration::from_millis(500))
     }
 }

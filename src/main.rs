@@ -8,7 +8,7 @@ use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
 
 use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
-use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
+use rusty_loader::usb::{ConnectError, ProgramError, SoftRebootor, Teensy};
 
 static mut VERBOSE: bool = false;
 
@@ -50,6 +50,11 @@ fn main() {
             .long("wait")
             .short("w")
             .help("Wait for the device to appear")
+        )
+        .arg(Arg::with_name("soft-reboot")
+            .long("soft-reboot")
+            .short("s")
+            .help("Use soft reboot if device is not online, implies --wait (Teensy3.x only)")
         )
         .arg(Arg::with_name("no-reboot")
             .long("no-reboot")
@@ -137,12 +142,28 @@ fn main() {
         None
     };
 
-    let wait_for_device = matches.is_present("wait");
+    let mut wait_for_device = matches.is_present("wait");
+    let mut soft_boot = matches.is_present("soft-reboot");
     let mut waited = false;
     let mut teensy = loop {
         match Teensy::connect(mcu) {
             Ok(t) => break t,
             Err(err) => {
+                if soft_boot {
+                    match SoftRebootor::connect() {
+                        Ok(mut r) => match r.reboot() {
+                            Ok(_) => println_verbose!("Soft reboot performed"),
+                            Err(err) => eprintln!("Soft reboot write error: {:?}", err),
+                        }
+                        Err(err) => if err == ConnectError::DeviceNotFound {
+                            eprintln!("Failed to find soft reboot device");
+                        } else {
+                            eprintln!("Soft reboot connection error: {:?}", err);
+                        }
+                    }
+                    soft_boot = false;
+                    wait_for_device = true;
+                }
                 if err == ConnectError::DeviceNotFound && !wait_for_device {
                     eprintln!("Unable to open device (hint: try --wait)");
                     std::process::exit(1);
