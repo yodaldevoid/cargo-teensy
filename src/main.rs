@@ -7,8 +7,8 @@ use clap::{App, Arg};
 use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
 
-use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
-use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
+use cargo_teensy::usb::{ConnectError, ProgramError, Teensy};
+use cargo_teensy::{ihex_to_bytes, parse_mcu, supported_mcus};
 
 static mut VERBOSE: bool = false;
 
@@ -29,10 +29,10 @@ macro_rules! print_verbose {
 }
 
 fn main() {
-    let matches = App::new("rusty_loader")
+    let matches = App::new("cargo-teensy")
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
         .author("Gabriel \"yodaldevoid\" Smith <ga29smith@gmail.com>")
-        .about("A rust rewrite of teensy_loader_cli")
+        .about("A rust rewrite of teensy_loader_cli integrated with cargo")
         .arg(
             Arg::with_name("mcu")
                 .long("mcu")

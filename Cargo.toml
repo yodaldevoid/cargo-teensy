@@ -1,5 +1,5 @@
 [package]
-name = "rusty_loader"
+name = "cargo-teensy"
 version = "0.1.0"
 authors = ["Gabriel Smith <ga29smith@gmail.com>"]
 edition = "2018"
