@@ -1,7 +1,11 @@
+use std::fs::File;
+use std::io::{Error as IoError, Read};
+
 use elf_rs::{
-    Elf32, GenElf, GenProgramHeader, GenSectionHeader, ProgramHeader32, SectionHeader,
-    SectionHeaderFlags, SectionType,
+    Elf, Elf32, ElfAbi, ElfMachine, ElfType, GenElf, GenElfHeader, GenProgramHeader,
+    GenSectionHeader, ProgramHeader32, ProgramType, SectionHeader, SectionHeaderFlags, SectionType,
 };
+use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
 
 pub mod usb;
@@ -143,12 +147,103 @@ mod tests {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum FileHint {
+    IHEX,
+    ELF,
+    Any,
+}
+
+impl FileHint {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            FileHint::IHEX => "Intel hex",
+            FileHint::ELF => "ELF",
+            FileHint::Any => "Intel hex or ELF",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum LoadError {
+    FailedOpen(IoError),
+    FailedRead(IoError),
+    NotValidFile,
+}
+
+pub fn load_file(
+    file_path: &str,
+    hint: FileHint,
+    mcu: &Mcu,
+) -> Result<(Vec<u8>, usize), LoadError> {
+    let mut file = File::open(file_path).map_err(|e| LoadError::FailedOpen(e))?;
+    let mut file_buf = Vec::new();
+    file.read_to_end(&mut file_buf)
+        .map_err(|e| LoadError::FailedRead(e))?;
+
+    // Assume the file is an ELF file first. If that fails to parse, try IHEX.
+    if hint != FileHint::IHEX {
+        match Elf::from_bytes(&file_buf[..]) {
+            // TODO: Return errors
+            Ok(Elf::Elf32(elf)) => {
+                if elf.header().machine() != ElfMachine::ARM {
+                    None
+                } else if elf.header().abi() != ElfAbi::SystemV {
+                    // SystemV is used as None
+                    None
+                } else if elf.header().elftype() != ElfType::ET_EXEC {
+                    None
+                } else if elf.program_headers().iter().any(|phdr| {
+                    phdr.ph_type() == ProgramType::DYNAMIC || phdr.ph_type() == ProgramType::INTERP
+                }) {
+                    None
+                } else {
+                    elf32_to_bytes(&elf, mcu).ok()
+                    //eprintln!("Failed to parse \"{}\" into binary form", file_path);
+                    //println_verbose!("Error: {:?}", err);
+                }
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+    .or_else(|| {
+        if hint != FileHint::ELF {
+            let file_str = String::from_utf8_lossy(&file_buf[..]);
+            let ihex_reader = IHexReader::new(&file_str);
+            let ihex_records: Result<Vec<_>, _> = ihex_reader.collect();
+            match ihex_records {
+                Ok(r) => Some(r),
+                Err(_err) => {
+                    //eprintln!("Failed to parse \"{}\" as Intel hex", file_path);
+                    //println_verbose!("Error: {}", err);
+                    None
+                }
+            }
+            .and_then(|ihex_records| {
+                match ihex_to_bytes(&ihex_records, mcu) {
+                    Err(_err) => {
+                        //eprintln!("Failed to parse \"{}\" into binary form", file_path);
+                        //println_verbose!("Error: {:?}", err);
+                        None
+                    }
+                    Ok(bin) => Some(bin),
+                }
+            })
+        } else {
+            None
+        }
+    })
+    .ok_or(LoadError::NotValidFile)
+}
+
 #[derive(Debug, PartialEq)]
-pub enum BinaryError {
+pub enum IHexError {
     AddressTooHigh(usize),
 }
 
-pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<(Vec<u8>, usize), BinaryError> {
+pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<(Vec<u8>, usize), IHexError> {
     let mut base_address = 0;
     let mut bytes = vec![0xFF; mcu.code_size];
     let mut len = 0;
@@ -158,7 +253,7 @@ pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<(Vec<u8>, usize),
             IHexRecord::Data { offset, value } => {
                 let end_addr = base_address + *offset as usize + value.len();
                 if end_addr >= mcu.code_size {
-                    return Err(BinaryError::AddressTooHigh(end_addr));
+                    return Err(IHexError::AddressTooHigh(end_addr));
                 }
 
                 len += value.len();
@@ -205,8 +300,11 @@ impl<'a, 'b> Section<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ElfError {}
+
 // TODO: verify nothing is above the MCU's code size
-pub fn elf32_to_bytes(elf: &Elf32, _mcu: &Mcu) -> Result<(Vec<u8>, usize), BinaryError> {
+pub fn elf32_to_bytes(elf: &Elf32, _mcu: &Mcu) -> Result<(Vec<u8>, usize), ElfError> {
     let sections: Vec<_> = elf
         .section_header_iter()
         .filter(|s| {
