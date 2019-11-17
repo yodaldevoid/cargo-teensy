@@ -1,3 +1,7 @@
+use elf_rs::{
+    Elf32, GenElf, GenProgramHeader, GenSectionHeader, ProgramHeader32, SectionHeader,
+    SectionHeaderFlags, SectionType,
+};
 use ihex::record::Record as IHexRecord;
 
 pub mod usb;
@@ -139,17 +143,25 @@ mod tests {
     }
 }
 
-pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<Vec<u8>, ()> {
+#[derive(Debug, PartialEq)]
+pub enum BinaryError {
+    AddressTooHigh(usize),
+}
+
+pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<(Vec<u8>, usize), BinaryError> {
     let mut base_address = 0;
     let mut bytes = vec![0xFF; mcu.code_size];
+    let mut len = 0;
 
     for rec in recs {
         match rec {
             IHexRecord::Data { offset, value } => {
-                if base_address + *offset as usize + value.len() >= mcu.code_size {
-                    return Err(());
+                let end_addr = base_address + *offset as usize + value.len();
+                if end_addr >= mcu.code_size {
+                    return Err(BinaryError::AddressTooHigh(end_addr));
                 }
 
+                len += value.len();
                 for (n, b) in value.iter().enumerate() {
                     bytes[base_address + *offset as usize + n] = *b;
                 }
@@ -157,11 +169,69 @@ pub fn ihex_to_bytes(recs: &[IHexRecord], mcu: &Mcu) -> Result<Vec<u8>, ()> {
             IHexRecord::ExtendedSegmentAddress(base) => base_address = (*base as usize) << 4,
             IHexRecord::ExtendedLinearAddress(base) => base_address = (*base as usize) << 16,
             IHexRecord::EndOfFile => break,
-            IHexRecord::StartLinearAddress(_) | IHexRecord::StartSegmentAddress { .. } => {
-                return Err(())
-            }
+            // Defines the start location for our program. This doesn't concern us so we ignore it.
+            IHexRecord::StartLinearAddress(_) | IHexRecord::StartSegmentAddress { .. } => {}
         }
     }
 
-    Ok(bytes)
+    Ok((bytes, len))
+}
+
+struct Section<'a> {
+    shdr: SectionHeader<'a, Elf32<'a>>,
+    load_addr: u32,
+    size: u32,
+}
+
+impl<'a, 'b> Section<'a> {
+    fn new(sec: SectionHeader<'a, Elf32<'a>>, phdrs: &'b [ProgramHeader32]) -> Self {
+        let shdr = sec.sh;
+
+        if let Some(phdr) = phdrs.iter().find(|phdr| {
+            shdr.addr() >= phdr.vaddr() && shdr.addr() + shdr.size() <= phdr.vaddr() + phdr.memsz()
+        }) {
+            Section {
+                shdr: sec,
+                load_addr: shdr.addr() - phdr.vaddr() + phdr.paddr(),
+                size: shdr.size(),
+            }
+        } else {
+            Section {
+                shdr: sec,
+                load_addr: shdr.addr(),
+                size: shdr.size(),
+            }
+        }
+    }
+}
+
+// TODO: verify nothing is above the MCU's code size
+pub fn elf32_to_bytes(elf: &Elf32, _mcu: &Mcu) -> Result<(Vec<u8>, usize), BinaryError> {
+    let sections: Vec<_> = elf
+        .section_header_iter()
+        .filter(|s| {
+            s.sh.sh_type() == SectionType::SHT_PROGBITS
+                && s.sh.flags().contains(SectionHeaderFlags::SHF_ALLOC)
+        })
+        .map(|s| Section::new(s, elf.program_headers()))
+        .collect();
+
+    let base_addr = sections.iter().map(|s| s.load_addr as usize).min().unwrap();
+    let end_addr = sections
+        .iter()
+        .map(|s| (s.load_addr + s.size) as usize)
+        .max()
+        .unwrap();
+    let size = end_addr - base_addr;
+
+    let mut data = vec![0; size];
+    let mut len = 0;
+
+    for section in sections {
+        let start = section.load_addr as usize - base_addr;
+        let end = start + section.size as usize;
+        len += end - start;
+        data[start..end].copy_from_slice(section.shdr.segment());
+    }
+    Ok((data, len))
 }

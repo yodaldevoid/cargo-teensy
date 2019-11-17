@@ -4,11 +4,13 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{App, Arg};
+use elf_rs::{
+    Elf, ElfAbi, ElfMachine, ElfType, GenElf, GenElfHeader, GenProgramHeader, ProgramType,
+};
 use ihex::reader::Reader as IHexReader;
-use ihex::record::Record as IHexRecord;
 
 use rusty_loader::usb::{ConnectError, ProgramError, Teensy};
-use rusty_loader::{ihex_to_bytes, parse_mcu, supported_mcus};
+use rusty_loader::{elf32_to_bytes, ihex_to_bytes, parse_mcu, supported_mcus};
 
 static mut VERBOSE: bool = false;
 
@@ -64,6 +66,22 @@ fn main() {
                 .help("Only boot the device, do not program"),
         )
         .arg(
+            Arg::with_name("elf")
+                .long("elf")
+                .short("e")
+                .help("Input file should be treated as an ELF file")
+                .conflicts_with("ihex")
+                .conflicts_with("boot-only"),
+        )
+        .arg(
+            Arg::with_name("ihex")
+                .long("ihex")
+                .short("i")
+                .help("Input file should be treated as an Intel HEX file")
+                .conflicts_with("elf")
+                .conflicts_with("boot-only"),
+        )
+        .arg(
             Arg::with_name("file")
                 .conflicts_with("boot-only")
                 .required_unless("boot-only"),
@@ -90,48 +108,92 @@ fn main() {
             .expect("No file path though boot-only not set");
         match File::open(file_path) {
             Ok(mut file) => {
-                // Check the binary size
-                let mut file_str = String::new();
-                if let Err(err) = file.read_to_string(&mut file_str) {
+                let mut file_buf = Vec::new();
+                if let Err(err) = file.read_to_end(&mut file_buf) {
                     eprintln!("Failed to read \"{:?}\"", file_path);
                     println_verbose!("Error: {}", err);
                     std::process::exit(1);
                 }
-                let ihex_reader = IHexReader::new(&file_str);
-                let ihex_records: Result<Vec<_>, _> = ihex_reader.collect();
-                let ihex_records = match ihex_records {
-                    Ok(r) => r,
-                    Err(err) => {
-                        eprintln!("Failed to parse \"{}\" as Intel hex", file_path);
-                        println_verbose!("Error: {}", err);
-                        std::process::exit(1);
-                    }
-                };
-                let len: usize = ihex_records
-                    .iter()
-                    .map(|rec| {
-                        if let IHexRecord::Data { value, .. } = rec {
-                            value.len()
-                        } else {
-                            0
+
+                // Assume the file is an ELF file first. If that fails to parse, try IHEX.
+                if let Some((binary, len)) = if !matches.is_present("ihex") {
+                    match Elf::from_bytes(&file_buf[..]) {
+                        // TODO: Print error
+                        Ok(Elf::Elf32(elf)) => {
+                            if elf.header().machine() != ElfMachine::ARM {
+                                None
+                            } else if elf.header().abi() != ElfAbi::SystemV {
+                                // SystemV is used as None
+                                None
+                            } else if elf.header().elftype() != ElfType::ET_EXEC {
+                                None
+                            } else if elf.program_headers().iter().any(|phdr| {
+                                phdr.ph_type() == ProgramType::DYNAMIC
+                                    || phdr.ph_type() == ProgramType::INTERP
+                            }) {
+                                None
+                            } else {
+                                elf32_to_bytes(&elf, &mcu).ok().or_else(|| {
+                                    eprintln!(
+                                        "Failed to parse \"{}\" into binary form",
+                                         file_path,
+                                    );
+                                    std::process::exit(1);
+                                })
+                            }
                         }
-                    })
-                    .sum();
-
-                println_verbose!(
-                    "Read \"{}\": {} bytes, {:.*}% usage",
-                    file_path,
-                    len,
-                    1,
-                    len as f64 / mcu.code_size as f64 * 100.0
-                );
-
-                match ihex_to_bytes(&ihex_records, &mcu) {
-                    Ok(binary) => Some(binary),
-                    Err(_) => {
-                        eprintln!("Failed to parse \"{}\" into binary form", file_path);
-                        std::process::exit(1);
+                        _ => None,
                     }
+                } else {
+                    None
+                }
+                .or_else(|| {
+                    if !matches.is_present("elf") {
+                        let file_str = String::from_utf8_lossy(&file_buf[..]);
+                        let ihex_reader = IHexReader::new(&file_str);
+                        let ihex_records: Result<Vec<_>, _> = ihex_reader.collect();
+                        match ihex_records {
+                            Ok(r) => Some(r),
+                            Err(err) => {
+                                eprintln!("Failed to parse \"{}\" as Intel hex", file_path);
+                                println_verbose!("Error: {}", err);
+                                None
+                            }
+                        }
+                        .and_then(|ihex_records| {
+                            match ihex_to_bytes(&ihex_records, &mcu) {
+                                Err(err) => {
+                                    eprintln!("Failed to parse \"{}\" into binary form", file_path);
+                                    println_verbose!("Error: {:?}", err);
+                                    None
+                                }
+                                Ok(bin) => Some(bin),
+                            }
+                        })
+                    } else {
+                        None
+                    }
+                }) {
+                    println_verbose!(
+                        "Read \"{}\": {} bytes, {:.*}% usage",
+                        file_path,
+                        len,
+                        1,
+                        len as f64 / mcu.code_size as f64 * 100.0
+                    );
+
+                    Some(binary)
+                } else {
+                    let file_types = match (matches.is_present("ihex"), matches.is_present("elf")) {
+                        (true, false) => "Intel hex",
+                        (false, true) => "ELF",
+                        _ => "Intel hex or ELF",
+                    };
+                    eprintln!(
+                        "\"{}\" does not seem to be an {} file",
+                        file_path, file_types
+                    );
+                    std::process::exit(1);
                 }
             }
             Err(err) => {
