@@ -3,7 +3,8 @@ use std::io::{Error as IoError, Read};
 
 use elf_rs::{
     Elf, Elf32, ElfAbi, ElfMachine, ElfType, GenElf, GenElfHeader, GenProgramHeader,
-    GenSectionHeader, ProgramHeader32, ProgramType, SectionHeader, SectionHeaderFlags, SectionType,
+    GenSectionHeader, ProgramHeader32, ProgramType, SectionHeader, SectionHeader32,
+    SectionHeaderFlags, SectionType,
 };
 use ihex::reader::Reader as IHexReader;
 use ihex::record::Record as IHexRecord;
@@ -115,36 +116,6 @@ pub fn supported_mcus() -> Vec<&'static str> {
         .map(|&(s, ..)| s)
         .chain(ALIASES.iter().map(|&(s, _)| s))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn list_supported_mcus() {
-        let expected_names = vec![
-            "at90usb162",
-            "atmega32u4",
-            "at90usb646",
-            "at90usb1286",
-            "mkl26z64",
-            "mk20dx128",
-            "mk20dx256",
-            "mk64fx512",
-            "mk66fx1m0",
-            "TEENSY2",
-            "TEENSY2PP",
-            "TEENSYLC",
-            "TEENSY30",
-            "TEENSY31",
-            "TEENSY32",
-            "TEENSY35",
-            "TEENSY36",
-        ];
-        let names = supported_mcus();
-        assert_eq!(expected_names, names);
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -282,9 +253,7 @@ impl<'a, 'b> Section<'a> {
     fn new(sec: SectionHeader<'a, Elf32<'a>>, phdrs: &'b [ProgramHeader32]) -> Self {
         let shdr = sec.sh;
 
-        if let Some(phdr) = phdrs.iter().find(|phdr| {
-            shdr.addr() >= phdr.vaddr() && shdr.addr() + shdr.size() <= phdr.vaddr() + phdr.memsz()
-        }) {
+        if let Some(phdr) = phdr_for_section(shdr, phdrs) {
             Section {
                 shdr: sec,
                 load_addr: shdr.addr() - phdr.vaddr() + phdr.paddr(),
@@ -300,31 +269,37 @@ impl<'a, 'b> Section<'a> {
     }
 }
 
+fn phdr_for_section<'a, 'b>(
+    shdr: &'a SectionHeader32,
+    phdrs: &'b [ProgramHeader32],
+) -> Option<&'b ProgramHeader32> {
+    phdrs.iter().find(|phdr| {
+        shdr.addr() >= phdr.vaddr() && shdr.addr() + shdr.size() <= phdr.vaddr() + phdr.memsz()
+    })
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ElfError {}
 
 // TODO: verify nothing is above the MCU's code size
-pub fn elf32_to_bytes(elf: &Elf32, _mcu: &Mcu) -> Result<(Vec<u8>, usize), ElfError> {
+pub fn elf32_to_bytes(elf: &Elf32, mcu: &Mcu) -> Result<(Vec<u8>, usize), ElfError> {
     let sections: Vec<_> = elf
         .section_header_iter()
         .filter(|s| {
             s.sh.sh_type() == SectionType::SHT_PROGBITS
                 && s.sh.flags().contains(SectionHeaderFlags::SHF_ALLOC)
+                && phdr_for_section(s.sh, elf.program_headers())
+                    .map(|phdr| phdr.ph_type() == ProgramType::LOAD)
+                    .unwrap_or(true)
+                && s.sh.size() != 0
         })
         .map(|s| Section::new(s, elf.program_headers()))
         .collect();
 
-    let base_addr = sections.iter().map(|s| s.load_addr as usize).min().unwrap();
-    let end_addr = sections
-        .iter()
-        .map(|s| (s.load_addr + s.size) as usize)
-        .max()
-        .unwrap();
-    let size = end_addr - base_addr;
-
-    let mut data = vec![0; size];
+    let mut data = vec![0xFF; mcu.code_size];
     let mut len = 0;
 
+    let base_addr = sections.iter().map(|s| s.load_addr as usize).min().unwrap();
     for section in sections {
         let start = section.load_addr as usize - base_addr;
         let end = start + section.size as usize;
@@ -332,4 +307,34 @@ pub fn elf32_to_bytes(elf: &Elf32, _mcu: &Mcu) -> Result<(Vec<u8>, usize), ElfEr
         data[start..end].copy_from_slice(section.shdr.segment());
     }
     Ok((data, len))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_supported_mcus() {
+        let expected_names = vec![
+            "at90usb162",
+            "atmega32u4",
+            "at90usb646",
+            "at90usb1286",
+            "mkl26z64",
+            "mk20dx128",
+            "mk20dx256",
+            "mk64fx512",
+            "mk66fx1m0",
+            "TEENSY2",
+            "TEENSY2PP",
+            "TEENSYLC",
+            "TEENSY30",
+            "TEENSY31",
+            "TEENSY32",
+            "TEENSY35",
+            "TEENSY36",
+        ];
+        let names = supported_mcus();
+        assert_eq!(expected_names, names);
+    }
 }
